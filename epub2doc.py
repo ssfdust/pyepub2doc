@@ -56,7 +56,7 @@ def get_content(epub_file):
     epub_file = epub_file.replace('.epub', '')
     return list_data, epub_file
     
-def turn_to_doc(l_data, epub_file):
+def turn_to_doc(l_data, doc_filename, p_count):
     """TODO: Docstring for get_content.
 
     :l_data: TODO
@@ -64,21 +64,22 @@ def turn_to_doc(l_data, epub_file):
     :returns: TODO
 
     """
-    new_document = Document(epub_file + '.docx')
-    count = 0
+    try:
+        template_file = os.path.join(sys._MEIPASS, 'templates/default.docx') 
+    except AttributeError:
+        template_file = None
+
+    new_document = Document(template_file)
     bar_count = 0
-    for data in l_data:
-        for item in data:
-            count += 1
-    with progressbar.ProgressBar(max_value=count, redirect_stdout=True) as bar:
+    with progressbar.ProgressBar(max_value=p_count, redirect_stdout=True) as bar:
         for data in l_data:
             for item in data:
                 new_document.add_paragraph(item)
                 bar_count += 1
                 bar.update(bar_count)
-    doc_filename = epub_file + '.docx'
-    new_document.save(doc_filename)
-    print('Success!File saved as {}\n'.format(doc_filename))
+    new_document.save(os.path.abspath(os.path.join('docx/',doc_filename)))
+    print('Success!File saved as {}\n'.format(os.path.abspath(os.path.join('docx/',doc_filename))))
+    return 0
 
 def main():
     """TODO: Docstring for get_content.
@@ -89,11 +90,21 @@ def main():
     parser = argparse.ArgumentParser(description='Translate epub to docx')
     parser.add_argument('path', help='the path where the epub files are') 
     args = vars(parser.parse_args())
+    always_write = False
+    always_skip = False
+    final_data_list = []
+
     print('change directory to %s' %args['path'])
     os.chdir(args['path'])
-    final_data_list = []
+    try:
+        os.mkdir('docx')
+    except FileExistsError:
+        print('WARNING:Ducument docx exists, files may be overwrote!\n')
+
     for epub_file in glob.glob('*.epub'):
+        p_count = 0
         list_data,filename = get_content(epub_file)
+        doc_filename = filename + '.docx'
         parser = data_parser()
         for data in list_data:
             parser.feed(data)
@@ -103,8 +114,27 @@ def main():
                 if '\n' in item:
                     data_copy.pop(i)
             final_data_list.append(data_copy)
-        turn_to_doc(final_data_list, os.path.join(args['path'], filename))
+        for item in final_data_list:
+            p_count += len(item)
+        if os.path.exists(os.path.abspath(os.path.join('docx/',doc_filename))) and not always_write:
+            if always_skip:
+                continue
+            print("'{}' already exists. Overwrite? [y/N/all/none] ".format(os.path.abspath(os.path.join('docx/',doc_filename)))),
+            response = sys.stdin.readline().strip().lower()
+            if (response == 'all'):
+                always_write = True
+                turn_to_doc(final_data_list, doc_filename, p_count)
+            elif (response == 'y' or response == "yes" ):
+                turn_to_doc(final_data_list, doc_filename, p_count)
+            elif (response == 'none'):
+                always_skip = True
+                continue
+            else:
+                continue
+        else:
+            turn_to_doc(final_data_list, doc_filename, p_count)
         final_data_list = []
 
 if (__name__ == "__main__"):
     sys.exit(main())
+
